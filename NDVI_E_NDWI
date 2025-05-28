@@ -1,0 +1,156 @@
+//////////////////// Java Script para GEE ////////////////////
+//////////////////// NDVI E NDWI ////////////////////
+
+
+//////////////////// Função para retirar nuvens e reescalar 
+function prepSrL8(image) {
+  // Develop masks for unwanted pixels (fill, cloud, cloud shadow).
+  var qaMask = image.select('QA_PIXEL').bitwiseAnd(parseInt('11111', 2)).eq(0);
+  var saturationMask = image.select('QA_RADSAT').eq(0);
+
+  // Apply the scaling factors to the appropriate bands.
+  var getFactorImg = function(factorNames) {
+    var factorList = image.toDictionary().select(factorNames).values();
+    return ee.Image.constant(factorList);
+  };
+  var scaleImg = getFactorImg([
+    'REFLECTANCE_MULT_BAND_.|TEMPERATURE_MULT_BAND_ST_B10']);
+  var offsetImg = getFactorImg([
+    'REFLECTANCE_ADD_BAND_.|TEMPERATURE_ADD_BAND_ST_B10']);
+  var scaled = image.select('SR_B.|ST_B10').multiply(scaleImg).add(offsetImg);
+
+  // Replace original bands with scaled bands and apply masks.
+  return image.addBands(scaled, null, true)
+    .updateMask(qaMask).updateMask(saturationMask);
+}
+
+//////////////// Função Recorte 
+
+var recorte = function(imagem_looping){
+  var image_clip = imagem_looping.clip(geometry)
+  return image_clip
+}
+
+////////////////// Função NDVI 
+
+var index_NDVI = function(image){
+  var NDVI = image.expression(
+    "((NIR - RED) / (NIR + RED))", {
+      "RED": image.select("SR_B4"),
+      "NIR": image.select("SR_B5")
+    })
+  var NDVI_band = NDVI.rename('NDVI')
+  return image.addBands(NDVI_band)
+}
+
+////////////////// Função mNDWI
+
+
+var index_mNDWI = function(image){
+  var mNDWI = image.expression(
+    "((GREEN - SWIR) / (GREEN + SWIR))", {
+      "GREEN": image.select("SR_B3"),
+      "SWIR": image.select("SR_B7")
+    })
+  var mNDWI_band = mNDWI.rename('mNDWI')
+  return image.addBands(mNDWI_band)
+}
+
+
+var landsat8 = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
+                .filterDate("2015-05-01", "2021-06-01")
+                .filterBounds(geometry)
+                .map(prepSrL8)
+                .map(recorte)
+                .map(index_NDVI)
+                .map(index_mNDWI)
+                
+print(landsat8)
+
+
+//////////////// Visualizar a imagem 
+
+var media_Landsat = landsat8.mean()
+
+var visualizacao = {
+  bands: ["SR_B4", "SR_B3", "SR_B2"],
+  min: 0,
+  max: 0.2,
+}
+
+Map.addLayer(media_Landsat, visualizacao, "Landsat médio")
+
+
+///////////////// Visualizar o NDVI
+
+var NDVI_mean = landsat8.select('NDVI').mean()
+
+var visualizacao = {
+  min: 0,
+  max: 1,
+  palette: ['red', 'yellow', 'green']
+}
+
+Map.addLayer(NDVI_mean, visualizacao, 'NDVI médio')
+
+
+///////////////// Visualizar o mNDWI
+
+var mNDWI_mean = landsat8.select('mNDWI').mean()
+
+var visualizacao_mNDWI = {
+  min: -1,
+  max: 0.5,
+  palette: ['white', 'blue']
+}
+
+Map.addLayer(mNDWI_mean, visualizacao_mNDWI, "mNDWI médio")
+
+
+////////////////// Criar uma máscara de água 
+
+var agua_mask = mNDWI_mean.lt(0).selfMask()
+
+Map.addLayer(agua_mask, {}, "Máscara de água")
+
+
+////////////////// Aplicar a máscara de água 
+
+var NDVI_mascaraAgua = NDVI_mean.updateMask(agua_mask)
+
+Map.addLayer(NDVI_mascaraAgua, visualizacao, "NDVI com máscara de água")
+
+///////////////////  Visualizar NDVI max
+
+var NDVI_max = landsat8.select('NDVI').max()
+
+var visualizacao = {
+  min: 0,
+  max: 1,
+  palette: ['red', 'yellow', 'green']
+}
+
+
+
+////////////////// Criar uma máscara de água 
+
+var NDVI_mascaraAguamax = NDVI_max.updateMask(agua_mask)
+
+Map.addLayer(NDVI_mascaraAguamax, visualizacao, "NDVI com máscara de água maximo")
+
+///////////////////  Visualizar NDVI max
+
+var NDVI_min = landsat8.select('NDVI').min()
+
+var visualizacao = {
+  min: 0,
+  max: 1,
+  palette: ['red', 'yellow', 'green']
+}
+
+
+////////////////// Criar uma máscara de água 
+
+var NDVI_mascaraAguamin = NDVI_min.updateMask(agua_mask)
+
+Map.addLayer(NDVI_mascaraAguamin, visualizacao, "NDVI com máscara de água minimo")
