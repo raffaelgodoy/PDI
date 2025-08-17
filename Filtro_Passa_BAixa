@@ -1,0 +1,71 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Sep 21 19:17:47 2024
+
+@author: rdgod
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from skimage import io
+
+# Função para aplicar filtro passa-baixa
+def aplica_filtro(X, dim):
+    nl, nc = X.shape[:2]
+    lado = (dim - 1) // 2  # Número de vizinhos antes ou depois do central
+    F = np.ones((dim, dim)) / (dim * dim)  # Pesos do filtro
+    Y = np.zeros((nl, nc), dtype=float)  # Replica imagem para gerar uma saída
+    X = np.array(X, dtype=float)  # Converter para float para facilitar as multiplicações
+
+    for L in range(lado, nl - lado):  # Varrer em linhas
+        for C in range(lado, nc - lado):  # Varrer em colunas
+            s = 0.  # Zerar soma para convolução
+            for i in range(dim):  # Varrer filtro em linhas e colunas
+                for j in range(dim):
+                    p = (L - lado) + i  # Coordenada do pixel na imagem
+                    q = (C - lado) + j
+                    s += X[p, q] * F[i, j]  # Pixel * peso
+            # Truncar se ficar fora da faixa
+            s = min(max(s, 0), 255)
+            Y[L, C] = np.uint8(np.round(s))  # Salvar na posição do central
+
+    return np.uint8(Y)
+
+# Lendo a imagem
+url = "https://docs.ufpr.br/~centeno/m_pdi/exepy/004/capi01.jpg"
+X1 = io.imread(url)
+
+# Aplicando os três filtros
+Y3x3 = aplica_filtro(X1, 3)  # Filtro 3x3
+Y5x5 = aplica_filtro(X1, 5)  # Filtro 5x5
+Y7x7 = aplica_filtro(X1, 7)  # Filtro 7x7
+
+# Salvando as imagens filtradas
+pasta = r"C:\Users\rdgod\OneDrive\Desktop\PDI - Centeno\Imagens"
+io.imsave(f"{pasta}\\teste_3x3.tif", Y3x3)
+io.imsave(f"{pasta}\\teste_5x5.tif", Y5x5)
+io.imsave(f"{pasta}\\teste_7x7.tif", Y7x7)
+
+# Exibindo a imagem original e as filtradas
+plt.figure(figsize=(18, 6))
+plt.subplot(1, 4, 1)
+plt.title('Imagem Original')
+plt.imshow(X1, cmap='gray', vmin=0, vmax=255)
+plt.axis('off')
+
+plt.subplot(1, 4, 2)
+plt.title('Filtro Passa-Baixa 3x3')
+plt.imshow(Y3x3, cmap='gray', vmin=0, vmax=255)
+plt.axis('off')
+
+plt.subplot(1, 4, 3)
+plt.title('Filtro Passa-Baixa 5x5')
+plt.imshow(Y5x5, cmap='gray', vmin=0, vmax=255)
+plt.axis('off')
+
+plt.subplot(1, 4, 4)
+plt.title('Filtro Passa-Baixa 7x7')
+plt.imshow(Y7x7, cmap='gray', vmin=0, vmax=255)
+plt.axis('off')
+
+plt.show()
