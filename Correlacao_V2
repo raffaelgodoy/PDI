@@ -1,0 +1,80 @@
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+import cv2  # Para desenhar quadrados na imagem
+
+
+# Definir o caminho da imagem e do template no diretório local
+pasta = r"C:\Users\rdgod\OneDrive\Desktop\PDI - Centeno\Imagens"
+imagem_nome = "correlacao.jpg"  # Nome da imagem
+template_nome = "template2.jpg"  # Nome do template
+
+# Função para transformar matriz em vetor
+def mat2vec(M):
+    return M.flatten()
+
+# Ler imagem de entrada e recuperar dimensões
+X1 = cv2.imread(f'{pasta}\\{imagem_nome}')
+X1_gray = cv2.cvtColor(X1, cv2.COLOR_BGR2GRAY)  # Converte para escala de cinza
+
+nl, nc = X1_gray.shape
+X = np.array(X1_gray, dtype=float)  # transforma em float
+Y = np.zeros((nl, nc), dtype=float)  # replica para gerar saída
+
+# Ler template
+T1 = cv2.imread(f'{pasta}\\{template_nome}')
+T1_gray = cv2.cvtColor(T1, cv2.COLOR_BGR2GRAY)  # Converte para escala de cinza
+
+tl, tc = T1_gray.shape
+T = np.array(T1_gray, dtype=float)
+print('Image size: ', nl, nc, " Template size: ", tl, tc)
+
+dim = tl  # tamanho do template, DEVE ser um quadrado!
+lado = (dim - 1) // 2  # número de vizinhos antes ou depois do central
+TT = mat2vec(T)  # transforma matriz template a vetor
+
+# Criar uma imagem RGB para desenhar as marcações
+imagem_marked = cv2.cvtColor(X1, cv2.COLOR_BGR2RGB)  # Inicializa a imagem RGB
+
+# Limite para considerar uma correlação como significativa
+limite_correlaçao = 0.85  # Ajustado para 0.9 conforme solicitado
+
+# Lista para armazenar coordenadas e valores de correlação
+coordenadas_marcadas = []
+
+for L in range(lado, nl - lado):  # varrer em linhas
+    for C in range(lado, nc - lado):  # varrer em colunas
+        p = L - lado  # posição inicial, canto superior esquerdo do recorte
+        q = C - lado
+        R = X[p:p + tl, q:q + tc]
+        
+        if R.shape != (tl, tc):
+            continue  # Se o recorte não tiver as dimensões esperadas, pula a iteração
+
+        RR = mat2vec(R)  # transforma região a vetor
+        rm = np.corrcoef(RR, TT)  # matriz de correlação
+        r = rm[0, 1]  # correlação
+        print(f"Correlação em ({L}, {C}): {r}")  # Print de depuração
+        if r < 0:  # não nos interessam correlações negativas
+            r = 0
+        Y[L, C] = r  # salva na posição do central
+        
+        # Armazenar as coordenadas e a correlação da região marcada
+        if r > limite_correlaçao:
+            coordenadas_marcadas.append((L, C, r))
+
+# Desenhar cruz nos pontos com correlação maior que 0.9
+for coords in coordenadas_marcadas:
+    L, C, r = coords
+    # Desenhar uma cruz nas coordenadas (L, C) em vermelho
+    cv2.drawMarker(imagem_marked, (C, L), (255, 0, 0), markerType=cv2.MARKER_CROSS, markerSize=20, thickness=2)
+
+# Salvar a nova imagem com as cruzes desenhadas
+cv2.imwrite(f'{pasta}\\imagem_marked_com_cruzes.jpeg', imagem_marked)
+
+# Mostrar a imagem com as cruzes
+plt.imshow(imagem_marked)
+plt.title("Marcação com Cruz nas Regiões de Maior Correlação")
+plt.axis('off')  # Desativar eixos
+plt.show()
