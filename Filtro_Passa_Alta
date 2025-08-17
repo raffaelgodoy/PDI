@@ -1,0 +1,63 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Sep 21 19:04:34 2024
+
+@author: rdgod
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from skimage import io
+
+# Função para aplicar filtro passa-alta (Laplaciano)
+def aplica_filtro_passa_alta(X):
+    nl, nc = X.shape[:2]
+    lado = 1  # Para filtro 3x3
+
+    # Filtro passa-alta (Laplaciano)
+    F = np.array([[0, -1, 0],
+                  [-1, 5, -1],
+                  [0, -1, 0]])
+
+    Y = np.zeros((nl, nc), dtype=float)  # Replica imagem para gerar uma saída
+    X = np.array(X, dtype=float)  # Converter para float para facilitar as multiplicações
+
+    for L in range(lado, nl - lado):  # Varrer em linhas
+        for C in range(lado, nc - lado):  # Varrer em colunas
+            s = 0.  # Zerar soma para convolução
+            for i in range(3):  # Varrer filtro em linhas e colunas (filtro 3x3)
+                for j in range(3):
+                    p = (L - lado) + i  # Coordenada do pixel na imagem
+                    q = (C - lado) + j
+                    s += X[p, q] * F[i, j]  # Pixel * peso
+            # Truncar se ficar fora da faixa
+            s = min(max(s, 0), 255)
+            Y[L, C] = np.uint8(np.round(s))  # Salvar na posição do central
+
+    return np.uint8(Y)
+
+# Lendo a imagem
+url = "https://docs.ufpr.br/~centeno/m_pdi/exepy/004/capi01.jpg"
+X1 = io.imread(url)
+
+# Aplicando o filtro passa-alta
+Y_passa_alta = aplica_filtro_passa_alta(X1)
+
+# Salvando a imagem filtrada
+pasta = r"C:\Users\rdgod\OneDrive\Desktop\PDI - Centeno\Imagens"
+nome = "teste_passa_alta.tif"
+io.imsave(f"{pasta}\\{nome}", Y_passa_alta)
+
+# Exibindo a imagem original e a filtrada
+plt.figure(figsize=(12, 6))
+plt.subplot(1, 2, 1)
+plt.title('Imagem Original')
+plt.imshow(X1, cmap='gray', vmin=0, vmax=255)
+plt.axis('off')
+
+plt.subplot(1, 2, 2)
+plt.title('Filtro Passa-Alta (Laplaciano)')
+plt.imshow(Y_passa_alta, cmap='gray', vmin=0, vmax=255)
+plt.axis('off')
+
+plt.show()
