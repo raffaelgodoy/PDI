@@ -1,0 +1,86 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Sep 21 14:12:04 2024
+
+@author: rdgod
+"""
+import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
+import seaborn as sns
+
+# Definir o caminho da imagem no diretório local
+pasta = r"C:\Users\rdgod\OneDrive\Desktop\PDI - Centeno\Imagens"
+nome = "teste01.tif"  # Nome da imagem corrigido
+arq = pasta + "\\" + nome  # Usar o separador correto para Windows
+
+# Verificar o caminho do arquivo
+print("Caminho da imagem:", arq)
+
+# Abrir a imagem
+try:
+    I = np.array(Image.open(arq))  # Tenta abrir a imagem
+    print('Imagem carregada com sucesso!')
+except FileNotFoundError:
+    print(f"Erro: Arquivo não encontrado no caminho {arq}. Verifique o nome do arquivo e o caminho.")
+
+# Verificar se a imagem foi carregada antes de continuar
+if 'I' in locals():
+    # Mostrar informações da imagem
+    print('Tamanho:', I.shape)  # Número de linhas, colunas e bandas (canais)
+    if len(I.shape) == 3:  # Imagem colorida (RGB)
+        n, m, bandas = I.shape
+        print(f"A imagem tem {bandas} bandas (canais de cor).")
+    else:  # Imagem em tons de cinza
+        n, m = I.shape
+        print("A imagem está em tons de cinza.")
+
+    # Encontrar valores mínimos e máximos
+    minimo = np.min(I)
+    maximo = np.max(I)
+    print('Valor mínimo do pixel:', minimo)
+    print('Valor máximo do pixel:', maximo)
+
+    # Calcular brilho e contraste
+    brilho = np.mean(I)
+    contraste = maximo - minimo
+    print('Brilho médio da imagem:', brilho)
+    print('Contraste da imagem:', contraste)
+
+    # Calcular bits necessários
+    bits_necessarios = np.ceil(np.log2(maximo + 1)).astype(int)
+    print(f"A imagem poderia ser armazenada com {bits_necessarios} bits por pixel.")
+
+    # Parâmetros da transformação linear
+    # Ajustando para contraste
+    a = 255 / contraste  # Fator de ganho
+    b = -a * minimo  # Deslocamento
+    print(f"Parâmetros da transformação linear: a = {a:.2f}, b = {b:.2f}")
+
+    # Exibir a imagem
+    if len(I.shape) == 3:  # Imagem colorida
+        plt.imshow(I)
+    else:  # Imagem em tons de cinza
+        plt.imshow(I, cmap='gray', vmin=0, vmax=255)
+
+    plt.axis('off')  # Ocultar os eixos
+    plt.show()
+
+    # Função para calcular e exibir o histograma usando seaborn
+    def histograma_seaborn(X):
+        if len(X.shape) == 3:
+            # Se for RGB, converte para tons de cinza usando a fórmula de luminosidade
+            X = np.dot(X[..., :3], [0.2989, 0.5870, 0.1140])
+
+        # Converter o array 2D em 1D para calcular o histograma
+        X_flat = X.flatten()
+
+        # Plotar o histograma usando seaborn
+        sns.histplot(X_flat, bins=256, color='blue', kde=False)
+        plt.title("Histograma da imagem")
+        plt.xlabel("Valor dos pixels")
+        plt.ylabel("Frequência")
+        plt.show()
+
+    # Chamar a função para calcular o histograma
+    histograma_seaborn(I)
