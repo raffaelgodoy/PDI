@@ -1,0 +1,88 @@
+// ---------- CONFIGURAÇÃO ----------
+var aoi = ee.FeatureCollection("projects/ee-rafadiasrd/assets/Cuba_Dissertacao");
+var startYear = 2024;
+var endYear = 2024;
+var bands = ['B2','B3','B4','B5','B6','B7','B8','B8A','B11','B12'];
+
+// ---------- COLEÇÃO DE IMAGENS ----------
+var s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+  .filterBounds(aoi)
+  .filterDate(startYear + '-01-01', endYear + '-12-31')
+  .select(bands)
+  .map(function(img){
+    // Apply cloud mask (if available and desired) and scale bands
+    // For simplicity, assuming no cloud mask is applied in the original code,
+    // but it's highly recommended for Sentinel-2.
+    return img.divide(10000).copyProperties(img, img.propertyNames());
+  });
+
+var s2List = s2.toList(s2.size());
+
+// ---------- PARES DE ÍNDICES ----------
+var pares = [
+  [18, 19],
+  [54, 55],
+  [68, 69],
+  [76, 77],
+  [80, 81]
+];
+
+// ---------- PARÂMETROS DE VISUALIZAÇÃO ----------
+var visRGB = {bands: ['B4','B3','B2'], min: 0, max: 0.3, gamma: 1.4};
+var visSWIR = {bands: ['B11'], min: 0, max: 0.3};
+
+// ---------- LOOP PRINCIPAL ----------
+pares.forEach(function(par, idx) {
+  var img1 = ee.Image(s2List.get(par[0]));
+  var img2 = ee.Image(s2List.get(par[1]));
+
+  // Reamostrando bandas SWIR (B11 e B12) para 10 m
+  var reamostra = function(img) {
+    // Reprojecting to the desired CRS and scale directly, then adding bands.
+    // Using the projection of B2 ensures consistency.
+    var swirB11 = img.select('B11').reproject({crs: img.select('B2').projection(), scale: 10});
+    var swirB12 = img.select('B12').reproject({crs: img.select('B2').projection(), scale: 10});
+    return img.addBands(swirB11, null, true).addBands(swirB12, null, true);
+  };
+
+  img1 = reamostra(img1);
+  img2 = reamostra(img2);
+
+  // Create a mosaic using .mosaic() which handles overlapping pixels by taking the last image.
+  // To avoid black lines from unmask(0) and improve blending, we can use .mosaic()
+  // or a more sophisticated blending approach if desired (e.g., median, quality mosaics).
+  // For simple overlap, .mosaic() is often sufficient and avoids the black line issue.
+  // If both images have valid data in an area, the later image in the collection (img2 in this case)
+  // will take precedence for that pixel. If only one has data, that data is used.
+  var collectionToMosaic = ee.ImageCollection([img1, img2]);
+  var mosaic = collectionToMosaic.mosaic().clip(aoi);
+
+  // Name da camada (sem getInfo) - getInfo() is client-side, needs to be handled carefully in GEE server-side context
+  // For server-side operations, use evaluate() or pass properties directly.
+  // Here, we'll get the date string for display purposes, which will be evaluated client-side when Map.addLayer is called.
+  var date1 = ee.Date(img1.get('system:time_start'));
+  var date2 = ee.Date(img2.get('system:time_start'));
+  var dateStr1 = date1.format('YYYYMMdd');
+  var dateStr2 = date2.format('YYYYMMdd');
+  var mosaicDateLabel = ee.String('RGB Mosaic ').cat(dateStr1).cat(' and ').cat(dateStr2);
+  var swirMosaicDateLabel = ee.String('SWIR Mosaic ').cat(dateStr1).cat(' and ').cat(dateStr2);
+
+  // ---------- VISUALIZAÇÃO ----------
+  // Use evaluate() for client-side strings in Map.addLayer, or construct server-side strings.
+  // For simplicity, we'll use a combined date string for the mosaic.
+  Map.addLayer(mosaic.select(['B4','B3','B2']), visRGB, mosaicDateLabel.getInfo());
+  Map.addLayer(mosaic.select(['B11','B12']), visSWIR, swirMosaicDateLabel.getInfo());
+
+  // ---------- EXPORTAÇÃO ----------
+  Export.image.toDrive({
+    image: mosaic,
+    description: ee.String('Sentinel2_Mosaic_').cat(dateStr1).cat('_').cat(dateStr2).getInfo(),
+    folder: 'GEE_Export',
+    region: aoi.geometry(),
+    scale: 10,
+    maxPixels: 1e13
+  });
+});
+
+// Centraliza o mapa
+Map.centerObject(aoi, 10);
