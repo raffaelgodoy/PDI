@@ -1,0 +1,68 @@
+
+
+/////////// Forma automática de dar zoom na área que está a geometria (geometry)
+
+var centre = geometry.centroid(10).coordinates();   
+Map.setCenter(ee.Number(centre.get(0)).getInfo(), ee.Number(centre.get(1)).getInfo(), 10);
+
+
+//////////////////// Extrair uma imagem Sentinel antes da construção da UHE São Manoel
+
+var antes = Sentinel_1.filterDate("2016-06-01", "2016-06-30")
+                    .filterBounds(geometry)
+                    .filter(ee.Filter.listContains("transmitterReceiverPolarisation", "VV"))
+                    .select('VV')
+                    .median()
+                    .clip(geometry)
+                    
+//////////////////// Extrair uma imagem Sentinel após a construção da UHE São Manoel
+                    
+var depois = Sentinel_1.filterDate("2022-06-01", "2022-06-30")
+                    .filterBounds(geometry)
+                    .filter(ee.Filter.listContains("transmitterReceiverPolarisation", "VV"))
+                    .select('VV')
+                    .median()
+                    .clip(geometry)
+                    
+////////////////// Criar uma imagem RGB com diferentes períodos
+                    
+var RGB = antes.rename("Red").addBands(depois.rename('Green')).addBands(depois.rename('Blue'))
+
+////////////// Adicionar as informações ao Mapa
+
+Map.addLayer(RGB, {min:-20, max:5, bands:["Red", "Green", "Blue"]}, 'Inundacação RGB')
+                    
+Map.addLayer(antes, {min:-20, max:5}, 'Antes da UHE São Manoel')
+Map.addLayer(depois, {min:-20, max:5}, 'Após UHE São Manoel')
+
+Map.addLayer(depois.lt(-18).selfMask(), {palette: ['blue']}, 'Após Belo Monte (inundação)')
+Map.addLayer(antes.lt(-15).selfMask(), {palette: ['purple']}, 'Antes Belo Monte (inundação)')
+
+
+///////// Depois-Antes
+
+var mudancas = depois.subtract(antes)
+
+Map.addLayer(mudancas, {min:-10, max:5}, 'Mudanças')
+
+var categoria = ee.Image(1).rename('Class')
+                .where(mudancas.gt(-9), 1)
+                .where(mudancas.lt(-9), 2)
+                
+var flooding = categoria.eq(2).selfMask()
+
+Map.addLayer(flooding, {palette:['cyan']}, 'Inundação')
+
+///////// Calculo dis pixels da ÁREA
+
+var Area = flooding.multiply(ee.Image.pixelArea())
+
+var Somatorio_Area = Area.reduceRegion({
+  reducer: ee.Reducer.sum(),
+  geometry: geometry,
+  scale: 500,
+  maxPixels: 1e9
+})
+
+
+print(Somatorio_Area)
